@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlasmidLite</title>
+<meta name="description" content="Free, open-source plasmid viewer and cloning helper that runs in your browser.">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><meta name="theme-color" content="#0f766e">
+<style>
+:root{--ink:#0f172a;--mut:#64748b;--acc:#0f766e;--line:#e2e8f0;--bg:#f8fafc}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line)}
+header b.logo{color:var(--acc);font-size:16px;margin-right:6px}
+button,select,input,textarea{font:inherit}
+button{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer}
+button:hover{background:#f1f5f9}button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}button.pri:hover{background:#0d5f59}
+input[type=text],input[type=number],select,textarea{border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;background:#fff}
+.sp{flex:1}
+main{flex:1;display:grid;grid-template-columns:minmax(360px,42%) 1fr;min-height:0}
+#left,#right{overflow:auto;min-height:0}
+#left{border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column}
+#mapbar{padding:6px 12px;color:var(--mut);display:flex;gap:12px;align-items:center}
+#map{width:100%;height:auto;max-height:52vh;flex:none}
+#map .ft{cursor:pointer}#map .ft:hover,#map .ft.on{stroke-opacity:.75}#map .lab{cursor:pointer}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px}
+.tab{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 12px}
+.tab.on{border-bottom-color:var(--acc);color:var(--acc);font-weight:600}
+#panel{padding:8px 12px;overflow:auto;flex:1;min-height:120px}
+.pb{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+table.tb{border-collapse:collapse;width:100%}table.tb td{padding:3px 6px;border-bottom:1px solid var(--line)}
+table.tb tr[data-f]{cursor:pointer}table.tb tr.on{background:#ccfbf1}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px}
+.mut{color:var(--mut)}.mono{font-family:ui-monospace,Consolas,monospace}.wrap{word-break:break-all}
+#rtool{display:flex;gap:8px;align-items:center;padding:6px 12px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:3;flex-wrap:wrap}
+#seqview{font:13px/18px ui-monospace,Consolas,"DejaVu Sans Mono",monospace;padding:8px 12px;position:relative;overflow:auto;height:calc(100% - 45px)}
+.row{display:flex;gap:12px;margin-bottom:10px}
+.num{width:7ch;text-align:right;color:var(--mut);padding-top:18px;flex:none}
+.body{position:relative;flex:none}
+.sq{white-space:pre;cursor:text;user-select:none;letter-spacing:0}
+.cq{white-space:pre;color:#cbd5e1;user-select:none}
+.aal{white-space:pre;height:18px;color:#334155;user-select:none}.aal .aM{color:#16a34a;font-weight:700}.aal .aS{color:#dc2626;font-weight:700}
+.enl{position:relative;height:14px}.en{position:absolute;top:0;white-space:nowrap}.en span{font-size:10px;color:#7c3aed;margin-left:-1px;border-left:1px solid #7c3aed;padding-left:2px}
+.fl{position:relative}
+.fb{position:absolute;height:16px;line-height:16px;overflow:hidden;white-space:nowrap;color:#fff;border-radius:3px;cursor:pointer;text-shadow:0 0 2px rgba(0,0,0,.5)}
+.fb span{font-size:10px;padding:0 3px}.fb.on{outline:2px solid #0f172a}
+.selbox{position:absolute;top:0;bottom:0;background:rgba(37,99,235,.18);pointer-events:none;display:none}
+.selbox.caret{background:none;border-left:2px solid #2563eb;width:0}
+#status{padding:4px 12px;background:#fff;border-top:1px solid var(--line);color:var(--mut);font-size:12px}
+dialog{border:1px solid #cbd5e1;border-radius:10px;padding:16px;max-width:460px;width:92vw}
+dialog label{display:block;margin:6px 0 2px;color:var(--mut);font-size:12px}
+dialog input[type=text],dialog input[type=number],dialog select,dialog textarea{width:100%}
+dialog menu{display:flex;gap:6px;justify-content:flex-end;padding:0;margin:12px 0 0}
+#toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast.on{opacity:1}
+@media(max-width:900px){main{grid-template-columns:1fr;grid-auto-rows:min-content}#left{border-right:0}#seqview{height:70vh}}
+</style></head><body>
+<noscript>PlasmidLite needs JavaScript.</noscript>
+<header>
+ <b class="logo">PlasmidLite</b>
+ <input id="pname" type="text" size="22" aria-label="Project name">
+ <select id="topo" aria-label="Topology"><option value="circular">circular</option><option value="linear">linear</option></select>
+ <button data-act="open">Open…</button>
+ <button data-act="new">New…</button>
+ <button class="pri" data-act="savehtml" title="Ctrl+S">Save as HTML</button>
+ <button data-act="gb">Export GenBank</button>
+ <button data-act="fasta">FASTA</button>
+ <button data-act="json">JSON</button>
+ <span class="sp"></span>
+ <button data-act="undo" title="Ctrl+Z">Undo</button><button data-act="redo" title="Ctrl+Y">Redo</button>
+ <button data-act="revcomp">Reverse complement</button>
+ <button data-act="demo">Demo</button>
+ <input id="file" type="file" hidden accept=".gb,.gbk,.genbank,.fa,.fasta,.fna,.json,.html,.htm,.txt,.seq">
+</header>
+<main>
+ <section id="left">
+  <div id="mapbar"><label><input type="checkbox" id="showEnz" checked> unique cutters on map</label><span class="mut">Drag in the sequence to select · click a feature to inspect</span></div>
+  <svg id="map" viewBox="0 0 680 660" role="img" aria-label="Plasmid map"></svg>
+  <div class="tabs"><button class="tab" data-tab="features">Features</button><button class="tab" data-tab="enzymes">Enzymes</button><button class="tab" data-tab="selection">Selection</button></div>
+  <div id="panel"></div>
+ </section>
+ <section id="right">
+  <div id="rtool">
+   <label>Translate <select id="frame"><option value="cds">CDS features</option><option value="off">off</option><option value="1">frame +1</option><option value="2">frame +2</option><option value="3">frame +3</option><option value="-1">frame −1</option><option value="-2">frame −2</option><option value="-3">frame −3</option></select></label>
+   <label>Bases/row <select id="bpr"><option>40</option><option selected>60</option><option>80</option><option>100</option></select></label>
+   <input id="find" type="text" placeholder="Find (IUPAC ok), Enter" size="20">
+  </div>
+  <div id="seqview"></div>
+ </section>
+</main>
+<div id="status"></div>
+<div id="toast"></div>
+<dialog id="dlg"><form method="dialog" id="dform"></form></dialog>
+
+<script type="application/json" id="project">null</script>
+<script>
+const uid=()=>Math.random().toString(36).slice(2,10);
+const COMP={A:'T',T:'A',G:'C',C:'G',R:'Y',Y:'R',K:'M',M:'K',S:'S',W:'W',B:'V',V:'B',D:'H',H:'D',N:'N'};
+function revcomp(s){let o='';for(let i=s.length-1;i>=0;i--)o+=COMP[s[i]]||'N';return o;}
+function cleanSeq(s){return String(s).toUpperCase().replace(/[^A-Z]/g,'').replace(/U/g,'T');}
+const CODON={};(function(){const B='TCAG',A='FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';let k=0;for(const a of B)for(const b of B)for(const c of B)CODON[a+b+c]=A[k++];})();
+function translate(s){let o='';for(let i=0;i+3<=s.length;i+=3)o+=CODON[s.substr(i,3)]||'X';return o;}
+function sliceCirc(s,a,b){return a<=b?s.slice(a,b):s.slice(a)+s.slice(0,b);}
+function featLen(f,L){return f.end>=f.start?f.end-f.start:L-f.start+f.end;}
+function featSeq(seq,f){const s=sliceCirc(seq,f.start,f.end);return f.strand<0?revcomp(s):s;}
+function gcPct(s){if(!s.length)return 0;let n=0;for(const c of s)if(c==='G'||c==='C')n++;return 100*n/s.length;}
+function tm(s){const n=s.length;let gc=0,at=0;for(const c of s){if(c==='G'||c==='C')gc++;else if(c==='A'||c==='T')at++;}
+ if(n<14)return 2*at+4*gc;return 64.9+41*(gc-16.4)/n;}
+const TYPE_COLORS={CDS:'#16a34a',gene:'#0ea5e9',promoter:'#f59e0b',terminator:'#dc2626',rep_origin:'#7c3aed',misc_feature:'#64748b',primer_bind:'#db2777',protein_bind:'#0d9488',RBS:'#ea580c',regulatory:'#ca8a04',misc_marker:'#2563eb',sig_peptide:'#9333ea'};
+const FEATURE_TYPES=Object.keys(TYPE_COLORS);
+function normalizeProject(p){
+ const q={id:p.id||uid(),rev:p.rev||'',name:String(p.name||'Untitled'),topology:p.topology==='linear'?'linear':'circular',sequence:cleanSeq(p.sequence||''),features:[]};
+ const L=q.sequence.length;
+ for(const f of (p.features||[])){
+  const s=Math.max(0,Math.min(L,Math.round(+f.start))),e=Math.max(0,Math.min(L,Math.round(+f.end)));
+  if(isNaN(s)||isNaN(e))continue;
+  q.features.push({label:String(f.label||f.type||'feature'),type:String(f.type||'misc_feature'),start:s,end:e,strand:f.strand<0?-1:1,color:f.color||TYPE_COLORS[f.type]||'#64748b',note:String(f.note||'')});
+ }
+ return q;
+}
+function parseLoc(loc,L,circ){
+ const strand=/^complement\(/.test(loc)?-1:1;
+ const r=[...loc.matchAll(/<?(\d+)(?:\.\.>?(\d+))?/g)].map(m=>[+m[1],+(m[2]||m[1])]);
+ if(!r.length)return null;
+ if(r.length===2&&r[1][0]<r[0][0]&&circ)return {start:r[0][0]-1,end:r[1][1],strand};
+ return {start:Math.min(...r.map(x=>x[0]))-1,end:Math.max(...r.map(x=>x[1])),strand};
+}
+function parseGenBank(text){
+ const lines=text.replace(/\r/g,'').split('\n');
+ const p={name:'Untitled',topology:'linear',sequence:'',features:[]};
+ let sect='',cur=null;const raw=[];
+ for(const line of lines){
+  if(line.startsWith('LOCUS')){const t=line.trim().split(/\s+/);p.name=t[1]||'Untitled';p.topology=/circular/i.test(line)?'circular':'linear';continue;}
+  if(line.startsWith('FEATURES')){sect='F';continue;}
+  if(line.startsWith('ORIGIN')){sect='O';cur=null;continue;}
+  if(line.startsWith('//'))break;
+  if(/^[A-Z]/.test(line)){sect='';continue;}
+  if(sect==='O')p.sequence+=line.replace(/[^A-Za-z]/g,'').toUpperCase();
+  else if(sect==='F'){
+   if(/^ {5}\S/.test(line)){cur={type:line.slice(5,21).trim(),loc:line.slice(21).trim(),q:{},last:null};raw.push(cur);}
+   else if(cur){const t=line.trim();
+    if(t.startsWith('/')){const m=t.match(/^\/([^=]+)(?:=(.*))?$/);cur.last=m[1];cur.q[m[1]]=m[2]||'';}
+    else if(cur.last===null)cur.loc+=t;
+    else cur.q[cur.last]+=' '+t;}
+  }
+ }
+ const L=p.sequence.length,circ=p.topology==='circular';
+ for(const r of raw){
+  if(r.type==='source')continue;
+  const loc=parseLoc(r.loc,L,circ);if(!loc)continue;
+  const q={};for(const k in r.q)q[k]=r.q[k].replace(/^"|"$/g,'');
+  const color=(q.ApEinfo_fwdcolor||q.color||'').replace(/^(#?)([0-9a-fA-F]{6})$/,'#$2');
+  p.features.push({label:q.label||q.gene||q.product||q.note||r.type,type:r.type,start:loc.start,end:loc.end,strand:loc.strand,color:/^#[0-9a-fA-F]{6}$/.test(color)?color:TYPE_COLORS[r.type]||'#64748b',note:q.note||''});
+ }
+ return p;
+}
+function parseFasta(text){
+ const lines=text.replace(/\r/g,'').split('\n');let name='Untitled',seq='';
+ for(const l of lines){if(l.startsWith('>')){if(seq)break;name=l.slice(1).trim().split(/\s+/)[0]||'Untitled';}else seq+=l;}
+ return {name,topology:'linear',sequence:cleanSeq(seq),features:[]};
+}
+function toFasta(name,seq){let o='>'+name+'\n';for(let i=0;i<seq.length;i+=70)o+=seq.slice(i,i+70)+'\n';return o;}
+function toGenBank(p){
+ const L=p.sequence.length,M=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],d=new Date();
+ const date=String(d.getUTCDate()).padStart(2,'0')+'-'+M[d.getUTCMonth()]+'-'+d.getUTCFullYear();
+ let o='LOCUS       '+p.name.replace(/\s+/g,'_').padEnd(16)+' '+String(L).padStart(7)+' bp    DNA     '+(p.topology==='circular'?'circular':'linear  ')+' SYN '+date+'\n';
+ o+='DEFINITION  '+p.name+'.\nFEATURES             Location/Qualifiers\n';
+ const q=(k,v)=>{const s='/'+k+'="'+String(v).replace(/"/g,"'")+'"';let r='';for(let i=0;i<s.length;i+=56)r+='                     '+s.slice(i,i+56)+'\n';return r;};
+ for(const f of p.features){
+  let loc=f.end>=f.start?(f.start+1)+'..'+f.end:'join('+(f.start+1)+'..'+L+',1..'+f.end+')';
+  if(f.strand<0)loc='complement('+loc+')';
+  o+='     '+f.type.padEnd(16)+loc+'\n'+q('label',f.label);
+  if(f.note)o+=q('note',f.note);
+  o+=q('ApEinfo_fwdcolor',f.color);
+ }
+ o+='ORIGIN\n';
+ for(let i=0;i<L;i+=60){let l=String(i+1).padStart(9);for(let j=0;j<6;j++){const c=p.sequence.substr(i+j*10,10);if(c)l+=' '+c.toLowerCase();}o+=l+'\n';}
+ return o+'//\n';
+}
+const ENZYME_DEFS="EcoRI G^AATTC;BamHI G^GATCC;HindIII A^AGCTT;XhoI C^TCGAG;NdeI CA^TATG;NcoI C^CATGG;NotI GC^GGCCGC;XbaI T^CTAGA;SpeI A^CTAGT;PstI CTGCA^G;SalI G^TCGAC;KpnI GGTAC^C;SacI GAGCT^C;SmaI CCC^GGG;XmaI C^CCGGG;EcoRV GAT^ATC;NheI G^CTAGC;BglII A^GATCT;ClaI AT^CGAT;MluI A^CGCGT;SphI GCATG^C;ApaI GGGCC^C;AgeI A^CCGGT;AscI GG^CGCGCC;PacI TTAAT^TAA;FseI GGCCGG^CC;SbfI CCTGCA^GG;NsiI ATGCA^T;BstBI TT^CGAA;AflII C^TTAAG;AatII GACGT^C;BsiWI C^GTACG;NruI TCG^CGA;BspHI T^CATGA;PmeI GTTT^AAAC;SnaBI TAC^GTA;ApaLI G^TGCAC;BclI T^GATCA;DraI TTT^AAA;HincII GTY^RAC;AvaI C^YCGRG;Acc65I G^GTACC;NaeI GCC^GGC;MfeI C^AATTG;SacII CCGC^GG;PvuI CGAT^CG;PvuII CAG^CTG;ScaI AGT^ACT;StuI AGG^CCT;SwaI ATTT^AAAT;AvrII C^CTAGG;HpaI GTT^AAC;BsrGI T^GTACA;EagI C^GGCCG;AclI AA^CGTT;SfoI GGC^GCC";
+const ENZYMES=ENZYME_DEFS.split(';').map(x=>{const [name,s]=x.split(' ');return {name,site:s.replace('^',''),cut:s.indexOf('^'),disp:s};});
+const IUPAC={A:'A',C:'C',G:'G',T:'T',R:'[AG]',Y:'[CT]',K:'[GT]',M:'[AC]',S:'[CG]',W:'[AT]',B:'[CGT]',D:'[AGT]',H:'[ACT]',V:'[ACG]',N:'[ACGT]'};
+const iupacRe=s=>[...s].map(c=>IUPAC[c]||c).join('');
+function findSites(seq,circ,enzymes){
+ const L=seq.length;
+ return enzymes.map(e=>{
+  const n=e.site.length,hay=circ?seq+seq.slice(0,n-1):seq,re=new RegExp('(?='+iupacRe(e.site)+')','g'),pos=[];
+  let m;
+  while((m=re.exec(hay))){
+   const i=m.index;re.lastIndex=i+1;
+   if(i>=L)break;
+   let c=i+e.cut;
+   if(circ)c%=L;else if(c<=0||c>=L)continue;
+   pos.push(c);
+  }
+  return {name:e.name,site:e.site,disp:e.disp,cut:e.cut,pos};
+ });
+}
+function digestFrags(L,circ,cuts){
+ const c=[...new Set(cuts)].sort((a,b)=>a-b);
+ if(!c.length)return [{start:0,end:L,len:L}];
+ const f=[];
+ if(circ){for(let i=0;i<c.length;i++){const s=c[i],e=c[(i+1)%c.length];f.push({start:s,end:e,len:((e-s+L)%L)||L});}}
+ else{const p=[0,...c,L];for(let i=0;i<p.length-1;i++)f.push({start:p[i],end:p[i+1],len:p[i+1]-p[i]});}
+ return f;
+}
+function fragSeq(seq,fr){return fr.start<fr.end?seq.slice(fr.start,fr.end):seq.slice(fr.start)+seq.slice(0,fr.end);}
+function editSeq(P,start,end,ins){
+ const d=ins.length-(end-start);
+ P.sequence=P.sequence.slice(0,start)+ins+P.sequence.slice(end);
+ const ms=p=>p>=end?p+d:(p<=start?p:start+ins.length);
+ const me=p=>p<=start?p:(p>=end?p+d:start);
+ const out=[];
+ for(const f of P.features){
+  const wrapped=f.end<f.start,n={...f,start:ms(f.start),end:me(f.end)};
+  if(!wrapped&&n.end<=n.start)continue;
+  out.push(n);
+ }
+ P.features=out;
+}
+function setOrigin(P,pos){
+ const L=P.sequence.length;
+ P.features=P.features.map(f=>{const n=featLen(f,L),s=(f.start-pos+L)%L;let e=s+n;if(e>L)e-=L;return {...f,start:s,end:e};});
+ P.sequence=P.sequence.slice(pos)+P.sequence.slice(0,pos);
+}
+function revcompProject(P){
+ const L=P.sequence.length;
+ P.sequence=revcomp(P.sequence);
+ P.features=P.features.map(f=>({...f,start:L-f.end,end:L-f.start,strand:-f.strand}));
+}
+function aaTrack(seq,mode,features){
+ const L=seq.length,a=new Array(L).fill(' ');
+ const put=(s,e,strand)=>{
+  if(strand>=0){for(let p=s;p+3<=e;p+=3)a[p+1]=CODON[seq.substr(p,3)]||'X';}
+  else{for(let p=e;p-3>=s;p-=3)a[p-2]=CODON[revcomp(seq.slice(p-3,p))]||'X';}
+ };
+ if(mode==='cds'){for(const f of features)if(f.type==='CDS'&&f.end>f.start)put(f.start,f.end,f.strand);}
+ else if(mode>0)put(mode-1,L,1);
+ else if(mode<0)put(0,L-(-mode-1),-1);
+ return a;
+}
+function findMotif(seq,motif,circ,from){
+ const L=seq.length,m=cleanSeq(motif);if(!m)return null;
+ const hay=circ?seq+seq.slice(0,m.length-1):seq,hits=[];
+ for(const [pat,strand] of [[m,1],[revcomp(m),-1]]){
+  const re=new RegExp('(?='+iupacRe(pat)+')','g');let x;
+  while((x=re.exec(hay))){re.lastIndex=x.index+1;if(x.index>=L)break;hits.push({start:x.index,end:(x.index+m.length)>L?(x.index+m.length)-L:x.index+m.length,strand});}
+ }
+ hits.sort((a,b)=>a.start-b.start);
+ return hits.find(h=>h.start>=from)||hits[0]||null;
+}
+</script>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const OPEN='<scr'+'ipt type="application/json" id="project">',CLOSE='</scr'+'ipt>';
+const ORIGINAL='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DEMO={"name": "demo-expression-vector", "topology": "circular", "sequence": "TTTCCTCATGCAATTCAAAACCATGTCCGTAATGTAGGCGAAATAGTAAACCATTTTACGGAGGATACCAAATTCCTCCTTATTCAGGACCTAACCTGAGGTAAACCAGGTCTCTCCGCCGAATTCCCCTTATAAAAGCTGTTGCACCTAGCCAAGTAATACGACTCACTATAGGGTTCAACGGCAGCAAGGAGTGCAATCATATGAGCAAAGGTGAAGAACTGTTTACCGGTGTGGTGCCGATTCTGGTGGAACTGGATGGTGATGTGAACGGTCACAAATTTAGCGTGAGCGGTGAAGGTGAAGGTGATGCGACCTATGGTAAACTGGGATCCCTCGAGCACCACCACCACCACCACTAAGGAAATAGGCAATGACGGATATATAAAGCTTTTAAAAAGTGTTTTAAGATACATTGAGGCCCGTTCGTGCTCCTCGCCCTGAAGCATTGCTTTGTGAAGAGGGACTTCAGCCAATAGACCTGCATACCGGCTCATTCTTCATGTGCAACCTAGGGAGAATGTGTACATACGCTCTTACTGCGGTCGCGTCTAATAATATACATTTGCTTCGTTGACTAGCAACCCAGGGCTATAGCTATTCCCCCCGCGGCCCACCCAGTATTCCTAACGGAGCATAAATC", "features": [{"label": "T7 promoter", "type": "promoter", "start": 156, "end": 176, "strand": 1}, {"label": "RBS", "type": "RBS", "start": 188, "end": 194, "strand": 1}, {"label": "6xHis tag", "type": "misc_feature", "start": 341, "end": 359, "strand": 1}, {"label": "demo ORF", "type": "CDS", "start": 203, "end": 362, "strand": 1}, {"label": "terminator (demo)", "type": "terminator", "start": 453, "end": 493, "strand": 1}]};
+let P=null,sel=null,selFeat=-1,undo=[],redo=[],tab='features',SITES=[],sitesSeq=null,sitesTopo=null,digestSel=new Set(),frags=null,enzFilter='cut',saveTimer=null;
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2500);}
+function embedded(){try{const t=$('#project').textContent.trim();return t&&t!=='null'?JSON.parse(t):null;}catch(e){return null;}}
+function projectFromHtml(h){const i=h.indexOf(OPEN);if(i<0)return null;const j=h.indexOf(CLOSE,i);const t=h.slice(i+OPEN.length,j).trim();return t&&t!=='null'?JSON.parse(t):null;}
+const key=()=>'auto:'+P.id+':'+(P.rev||0);
+
+const idb={db:null,open(){if(this.db)return Promise.resolve(this.db);return new Promise((res,rej)=>{const r=indexedDB.open('plasmidlite',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{this.db=r.result;res(r.result);};r.onerror=()=>rej(r.error);});},
+ async get(k){const db=await this.open();return new Promise((res,rej)=>{const q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});},
+ async set(k,v){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}};
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{try{await idb.set(key(),P);await idb.set('last',key());}catch(e){}},400);}
+
+function setProject(p){P=normalizeProject(p);sel=null;selFeat=-1;undo=[];redo=[];frags=null;digestSel.clear();renderAll();scheduleSave();}
+function mutate(fn){undo.push(JSON.stringify(P));if(undo.length>100)undo.shift();redo=[];frags=null;fn();renderAll();scheduleSave();}
+function doUndo(){if(!undo.length)return;redo.push(JSON.stringify(P));P=JSON.parse(undo.pop());sel=null;selFeat=-1;frags=null;renderAll();scheduleSave();}
+function doRedo(){if(!redo.length)return;undo.push(JSON.stringify(P));P=JSON.parse(redo.pop());sel=null;selFeat=-1;frags=null;renderAll();scheduleSave();}
+
+function importText(text,filename){
+ const t=text.trim();let p;
+ if(/\.html?$/i.test(filename||'')||/^<!doctype|^<html/i.test(t)){p=projectFromHtml(text);if(!p)throw new Error('No PlasmidLite project found in this HTML file.');}
+ else if(t.startsWith('{')){p=JSON.parse(t);}
+ else if(/^LOCUS/m.test(t))p=parseGenBank(text);
+ else if(t.startsWith('>'))p=parseFasta(text);
+ else p={name:(filename||'pasted').replace(/\.[^.]+$/,''),topology:'linear',sequence:cleanSeq(t),features:[]};
+ if(!p.name||p.name==='Untitled')p.name=(filename||'Untitled').replace(/\.[^.]+$/,'');
+ return p;
+}
+async function openFile(f){try{const txt=await f.text();const p=importText(txt,f.name);p.id=undefined;if(/\.html?$/i.test(f.name)){const e=projectFromHtml(txt);if(e&&e.id)p.id=e.id,p.rev=e.rev;}setProject(p);toast('Opened '+f.name);}catch(e){alert('Could not open file: '+e.message);}}
+
+async function saveFile(name,text,type){
+ if(window.showSaveFilePicker){try{const h=await showSaveFilePicker({suggestedName:name});const w=await h.createWritable();await w.write(new Blob([text],{type}));await w.close();toast('Saved '+name);return;}catch(e){if(e&&e.name==='AbortError')return;}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('Downloaded '+name);
+}
+function buildHtml(){P.rev=uid();const json=JSON.stringify(P).replace(/</g,'\\u003c');const i=ORIGINAL.indexOf(OPEN),j=ORIGINAL.indexOf(CLOSE,i);return ORIGINAL.slice(0,i+OPEN.length)+json+ORIGINAL.slice(j);}
+const fname=ext=>P.name.replace(/[^\w.-]+/g,'_')+ext;
+
+/* ---------- dialogs ---------- */
+function dialog(html,onOk,onDel){
+ const dlg=$('#dlg'),form=$('#dform');form.innerHTML=html;dlg.returnValue='';
+ dlg.onclose=()=>{const v=dlg.returnValue;if(v==='ok')onOk(form.elements);else if(v==='del'&&onDel)onDel();};
+ dlg.showModal();
+}
+function featDialog(i){
+ const L=P.sequence.length,isNew=i<0;
+ const f=isNew?{label:'',type:'misc_feature',start:sel?sel.start:0,end:sel&&sel.end>sel.start?sel.end:Math.min(L,1),strand:1,color:TYPE_COLORS.misc_feature,note:''}:P.features[i];
+ dialog(`<h3>${isNew?'Add':'Edit'} feature</h3>
+ <label>Label</label><input name="label" type="text" required value="${esc(f.label)}">
+ <label>Type</label><select name="type">${FEATURE_TYPES.map(t=>`<option${t===f.type?' selected':''}>${t}</option>`).join('')}</select>
+ <label>Start (1-based)</label><input name="start" type="number" min="1" max="${L}" required value="${f.start+1}">
+ <label>End (1-based, inclusive)</label><input name="end" type="number" min="1" max="${L}" required value="${f.end}">
+ <label>Strand</label><select name="strand"><option value="1"${f.strand>=0?' selected':''}>forward →</option><option value="-1"${f.strand<0?' selected':''}>reverse ←</option></select>
+ <label>Colour</label><input name="color" type="color" value="${esc(f.color)}">
+ <label>Note</label><textarea name="note" rows="2">${esc(f.note||'')}</textarea>
+ <menu>${isNew?'':'<button value="del" formnovalidate>Delete</button>'}<button value="cancel" formnovalidate>Cancel</button><button class="pri" value="ok">Save</button></menu>`,
+ el=>{
+  const s=+el.start.value-1,e=+el.end.value;
+  if(e===s||(e<s&&P.topology!=='circular')){alert('Invalid range. Features that wrap around the origin need a circular sequence.');return;}
+  mutate(()=>{const nf={label:el.label.value.trim()||el.type.value,type:el.type.value,start:s,end:e,strand:+el.strand.value,color:el.color.value,note:el.note.value};if(isNew){P.features.push(nf);selFeat=P.features.length-1;}else P.features[i]=nf;});
+ },()=>mutate(()=>{P.features.splice(i,1);selFeat=-1;}));
+ if(isNew)$('#dform').elements.type.addEventListener('change',e=>{$('#dform').elements.color.value=TYPE_COLORS[e.target.value]||'#64748b';});
+}
+function editSelDialog(){
+ if(!sel)return;const n=sel.end-sel.start;
+ dialog(`<h3>${n?'Replace / delete selection':'Insert at position '+(sel.start+1)}</h3>
+ <p class="mut">${n?`Replaces ${n} bp (${sel.start+1}..${sel.end}) with the DNA below. Leave empty to delete.`:'Paste the DNA to insert before this position.'} Features are shifted automatically.</p>
+ <label>DNA</label><textarea name="dna" rows="5" class="mono"></textarea>
+ <menu><button value="cancel" formnovalidate>Cancel</button><button class="pri" value="ok">Apply</button></menu>`,
+ el=>{const ins=cleanSeq(el.dna.value);if(!n&&!ins)return;mutate(()=>{editSeq(P,sel.start,sel.end,ins);sel={start:sel.start,end:sel.start+ins.length};});});
+}
+function newDialog(){
+ dialog(`<h3>New project</h3><label>Name</label><input name="name" type="text" value="new-construct">
+ <label>Sequence (plain, FASTA or GenBank text; leave empty for blank)</label><textarea name="seq" rows="6" class="mono"></textarea>
+ <label>Topology</label><select name="topo"><option>circular</option><option>linear</option></select>
+ <menu><button value="cancel" formnovalidate>Cancel</button><button class="pri" value="ok">Create</button></menu>`,
+ el=>{const raw=el.seq.value;let p;try{p=raw.trim()?importText(raw,el.name.value):{sequence:'',features:[]};}catch(e){alert(e.message);return;}
+  p.name=el.name.value.trim()||'Untitled';if(!/^LOCUS/m.test(raw))p.topology=el.topo.value;p.id=undefined;setProject(p);});
+}
+
+/* ---------- map ---------- */
+const niceStep=L=>[10,20,50,100,200,250,500,1000,2000,2500,5000,10000,20000,50000,100000,500000].find(s=>L/s<=12)||1000000;
+function lanesFor(L){
+ const o=P.features.map((f,i)=>({i,s:f.start,e:f.end>=f.start?f.end:f.end+L})).sort((a,b)=>a.s-b.s),ends=[],res={};
+ for(const x of o){let k=0;while(k<ends.length&&ends[k]>x.s)k++;ends[k]=x.e;res[x.i]=k;}
+ return {res,n:Math.max(1,ends.length)};
+}
+function spread(items,gap){for(const side of ['r','l']){const g=items.filter(i=>i.side===side).sort((a,b)=>a.y-b.y);for(let k=1;k<g.length;k++)if(g[k].y<g[k-1].y+gap)g[k].y=g[k-1].y+gap;}}
+const uniqSites=()=>SITES.filter(s=>s.pos.length===1);
+function circMap(L){
+ const cx=340,cy=330,R=170,TAU=Math.PI*2,ang=p=>TAU*p/L-Math.PI/2,pol=(a,r)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+ const arc=(r,a0,a1)=>{const [x0,y0]=pol(a0,r),[x1,y1]=pol(a1,r);return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${(a1-a0)>Math.PI?1:0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;};
+ const {res,n}=lanesFor(L);
+ let o=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>`;
+ const step=niceStep(L);
+ for(let p=0;p<L;p+=step){const a=ang(p),[x1,y1]=pol(a,R+2),[x2,y2]=pol(a,R+9),[tx,ty]=pol(a,R+20);o+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8"/><text x="${tx}" y="${ty}" font-size="9" fill="#94a3b8" text-anchor="middle" dominant-baseline="middle">${p}</text>`;}
+ if(sel){const mid=R-10-(n-1)*8;if(sel.end>sel.start){let a1=ang(sel.end);const a0=ang(sel.start);if(a1-a0>=TAU)a1=a0+TAU-.002;o+=`<path d="${arc(mid,a0,a1)}" stroke="#2563eb" stroke-opacity=".2" stroke-width="${n*16+10}" fill="none"/>`;}
+  else{const [x1,y1]=pol(ang(sel.start),R+14),[x2,y2]=pol(ang(sel.start),R-n*16-6);o+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2563eb" stroke-width="2"/>`;}}
+ const labs=[];
+ P.features.forEach((f,i)=>{
+  const r=R-10-res[i]*16;let a0=ang(f.start),a1=ang(f.end>=f.start?f.end:f.end+L);if(a1-a0>=TAU)a1=a0+TAU-.002;
+  o+=`<path data-f="${i}" class="ft${i===selFeat?' on':''}" d="${arc(r,a0,a1)}" stroke="${esc(f.color)}" stroke-width="12" fill="none"><title>${esc(f.label)} (${f.start+1}..${f.end})</title></path>`;
+  const dir=f.strand<0?-1:1,ae=dir>0?a1:a0,[px,py]=pol(ae,r),tx=-Math.sin(ae)*dir,ty=Math.cos(ae)*dir,nx=Math.cos(ae),ny=Math.sin(ae);
+  o+=`<polygon data-f="${i}" class="ft" points="${(px+tx*10).toFixed(1)},${(py+ty*10).toFixed(1)} ${(px+nx*9).toFixed(1)},${(py+ny*9).toFixed(1)} ${(px-nx*9).toFixed(1)},${(py-ny*9).toFixed(1)}" fill="${esc(f.color)}"/>`;
+  const am=(a0+a1)/2,[lx,ly]=pol(am,R+50);labs.push({i,a:am,x:lx,y:ly,side:Math.cos(am)>=0?'r':'l',t:f.label,ax:pol(am,R+4)});
+ });
+ spread(labs,13);
+ for(const l of labs){o+=`<line x1="${l.ax[0]}" y1="${l.ax[1]}" x2="${l.x}" y2="${l.y}" stroke="#cbd5e1"/><text data-f="${l.i}" class="lab" x="${l.x+(l.side==='r'?4:-4)}" y="${l.y}" font-size="11" text-anchor="${l.side==='r'?'start':'end'}" dominant-baseline="middle" fill="#0f172a">${esc(l.t.length>24?l.t.slice(0,23)+'…':l.t)}</text>`;}
+ if($('#showEnz').checked){
+  const eb=R-10-(n-1)*16-30,el=[];
+  for(const s of uniqSites()){const a=ang(s.pos[0]),[x,y]=pol(a,eb),[t1x,t1y]=pol(a,R-3),[t2x,t2y]=pol(a,R+3);o+=`<line x1="${t1x}" y1="${t1y}" x2="${t2x}" y2="${t2y}" stroke="#7c3aed"/>`;el.push({s,a,x,y,side:Math.cos(a)>=0?'r':'l',ax:pol(a,R-n*16-6)});}
+  spread(el,12);
+  for(const e of el){o+=`<line x1="${e.ax[0]}" y1="${e.ax[1]}" x2="${e.x}" y2="${e.y}" stroke="#ddd6fe"/><text x="${e.x+(e.side==='r'?-3:3)}" y="${e.y}" font-size="10" fill="#7c3aed" text-anchor="${e.side==='r'?'end':'start'}" dominant-baseline="middle"><title>${esc(e.s.disp)} cuts at ${e.s.pos[0]}</title>${esc(e.s.name)} (${e.s.pos[0]})</text>`;}
+ }
+ o+=`<text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="16" font-weight="600" fill="#0f172a">${esc(P.name.length>26?P.name.slice(0,25)+'…':P.name)}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="13" fill="#64748b">${L.toLocaleString()} bp</text>`;
+ return o;
+}
+function linMap(L){
+ const x0=40,x1=640,y0=300,X=p=>x0+(x1-x0)*p/L,{res}=lanesFor(L);
+ let o=`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="#94a3b8" stroke-width="2"/>`;
+ const step=niceStep(L);
+ for(let p=0;p<=L;p+=step)o+=`<line x1="${X(p)}" y1="${y0-4}" x2="${X(p)}" y2="${y0+4}" stroke="#94a3b8"/><text x="${X(p)}" y="${y0-10}" font-size="9" fill="#94a3b8" text-anchor="middle">${p}</text>`;
+ if(sel){o+=sel.end>sel.start?`<rect x="${X(sel.start)}" y="${y0-12}" width="${Math.max(2,X(sel.end)-X(sel.start))}" height="${Object.keys(res).length?Math.max(...Object.values(res))*20+50:40}" fill="#2563eb" fill-opacity=".15"/>`:`<line x1="${X(sel.start)}" y1="${y0-14}" x2="${X(sel.start)}" y2="${y0+40}" stroke="#2563eb" stroke-width="2"/>`;}
+ P.features.forEach((f,i)=>{
+  const ss=f.end>=f.start?[[f.start,f.end]]:[[f.start,L],[0,f.end]],y=y0+14+res[i]*20;
+  ss.forEach(([a,b])=>{const w=Math.max(2,X(b)-X(a));o+=`<rect data-f="${i}" class="ft${i===selFeat?' on':''}" x="${X(a)}" y="${y}" width="${w}" height="16" rx="3" fill="${esc(f.color)}"><title>${esc(f.label)} (${f.start+1}..${f.end})</title></rect>`;if(w>f.label.length*6+16)o+=`<text data-f="${i}" x="${X(a)+4}" y="${y+12}" font-size="10" fill="#fff" pointer-events="none">${f.strand<0?'◀ ':''}${esc(f.label)}${f.strand>=0?' ▶':''}</text>`;});
+ });
+ if($('#showEnz').checked)for(const s of uniqSites()){const x=X(s.pos[0]);o+=`<line x1="${x}" y1="${y0-6}" x2="${x}" y2="${y0+2}" stroke="#7c3aed"/><text transform="translate(${x},${y0-24}) rotate(-55)" font-size="10" fill="#7c3aed">${esc(s.name)}</text>`;}
+ o+=`<text x="340" y="60" text-anchor="middle" font-size="16" font-weight="600">${esc(P.name)}</text><text x="340" y="80" text-anchor="middle" font-size="13" fill="#64748b">${L.toLocaleString()} bp · linear</text>`;
+ return o;
+}
+function renderMap(){$('#map').innerHTML=P.topology==='circular'?circMap(P.sequence.length):linMap(P.sequence.length);}
+
+/* ---------- sequence view ---------- */
+function renderSeq(){
+ const sv=$('#seqview'),W=+$('#bpr').value,L=P.sequence.length,seq=P.sequence,keep=sv.scrollTop;
+ const m=$('#frame').value,aa=m==='off'?null:aaTrack(seq,m==='cds'?'cds':+m,P.features),uq=uniqSites();
+ const segs=[];
+ P.features.forEach((f,i)=>{(f.end>=f.start?[[f.start,f.end]]:[[f.start,L],[0,f.end]]).forEach(([a,b])=>segs.push({i,f,a,b}));});
+ let h='';
+ for(let s=0;s<L||(s===0&&L===0);s+=W){
+  const e=Math.min(L,s+W),row=seq.slice(s,e);
+  const here=segs.filter(x=>x.a<e&&x.b>s).map(x=>({...x,lo:Math.max(x.a,s),hi:Math.min(x.b,e)})).sort((a,b)=>a.lo-b.lo),ends=[];
+  let bars='';
+  for(const x of here){let k=0;while(k<ends.length&&ends[k]>x.lo)k++;ends[k]=x.hi;
+   const lab=(x.f.strand<0&&x.a>=s?'◀ ':'')+x.f.label+(x.f.strand>=0&&x.b<=e?' ▶':'');
+   bars+=`<div class="fb${x.i===selFeat?' on':''}" data-f="${x.i}" title="${esc(x.f.label)} (${x.f.start+1}..${x.f.end})" style="left:${x.lo-s}ch;width:${x.hi-x.lo}ch;top:${k*17}px;background:${esc(x.f.color)}"><span>${esc(lab)}</span></div>`;}
+  let enl='';
+  if($('#showEnz').checked)for(const q of uq){const c=q.pos[0];if(c>=s&&c<e||(c===e&&e===L))enl+=`<div class="en" style="left:${c-s}ch"><span>${esc(q.name)}</span></div>`;}
+  let al='';
+  if(aa){for(let p=s;p<e;p++){const c=aa[p];al+=c==='M'?'<span class="aM">M</span>':c==='*'?'<span class="aS">*</span>':c;}}
+  h+=`<div class="row"><div class="num">${s+1}</div><div class="body" style="width:${W}ch"><div class="enl">${enl}</div>${aa?`<div class="aal">${al}</div>`:''}<div class="sq" data-s="${s}">${row}</div><div class="cq">${esc(revcomp(row).split('').reverse().join(''))}</div><div class="fl" style="height:${Math.max(1,ends.length)*17}px">${bars}</div><div class="selbox" data-s="${s}"></div></div></div>`;
+  if(L===0)break;
+ }
+ sv.innerHTML=h||'<p class="mut">Empty sequence. Use New… to paste one.</p>';sv.scrollTop=keep;updateSelBoxes();
+}
+function updateSelBoxes(){
+ const W=+$('#bpr').value,L=P.sequence.length;
+ for(const el of $$('#seqview .selbox')){
+  const s=+el.dataset.s,e=Math.min(L,s+W);
+  if(!sel){el.style.display='none';continue;}
+  if(sel.end===sel.start){const c=sel.start>=s&&(sel.start<e||(sel.start===L&&e===L));el.className='selbox caret';el.style.display=c?'block':'none';el.style.left=(sel.start-s)+'ch';el.style.width='';continue;}
+  const lo=Math.max(sel.start,s),hi=Math.min(sel.end,e);el.className='selbox';
+  if(lo<hi){el.style.display='block';el.style.left=(lo-s)+'ch';el.style.width=(hi-lo)+'ch';}else el.style.display='none';
+ }
+}
+function scrollToPos(p){const W=+$('#bpr').value,sv=$('#seqview'),r=sv.children[Math.floor(p/W)];if(r)sv.scrollTop=r.offsetTop-sv.clientHeight/3;}
+
+/* ---------- panels ---------- */
+function featPanel(){
+ let h=`<div class="pb"><button data-act="addfeat">+ Add feature${sel&&sel.end>sel.start?' from selection':''}</button></div><table class="tb">`;
+ P.features.forEach((f,i)=>{h+=`<tr data-f="${i}" class="${i===selFeat?'on':''}"><td><i class="sw" style="background:${esc(f.color)}"></i></td><td>${esc(f.label)}</td><td class="mut">${esc(f.type)}</td><td>${f.start+1}..${f.end}</td><td>${f.strand<0?'←':'→'}</td><td><button data-edit="${i}" title="Edit">✎</button></td></tr>`;});
+ return h+'</table>'+(P.features.length?'':'<p class="mut">No features yet. Drag-select a region in the sequence, then click Add.</p>');
+}
+function gelSvg(lanes){
+ const H=300,lo=Math.log10(100),hi=Math.log10(12000),Y=s=>20+(hi-Math.log10(Math.max(100,Math.min(12000,s))))/(hi-lo)*(H-40);
+ let o=`<svg viewBox="0 0 ${40+lanes.length*70} ${H}" width="${40+lanes.length*70}" height="${H}"><rect width="100%" height="100%" fill="#0f172a" rx="6"/>`;
+ lanes.forEach((l,k)=>{const x=40+k*70;o+=`<rect x="${x}" y="8" width="50" height="6" fill="#334155"/><text x="${x+25}" y="${H-4}" font-size="9" fill="#94a3b8" text-anchor="middle">${esc(l.name)}</text>`;
+  l.sizes.forEach(s=>{const y=Y(s);o+=`<line x1="${x}" y1="${y}" x2="${x+50}" y2="${y}" stroke="#e2e8f0" stroke-width="2.5"/>`;if(k===0)o+=`<text x="${x-4}" y="${y+3}" font-size="8" fill="#94a3b8" text-anchor="end">${s}</text>`;});});
+ return o+'</svg>';
+}
+const LADDER=[10000,8000,6000,5000,4000,3000,2000,1500,1000,750,500,250];
+function fragHtml(){
+ const lanes=[{name:'ladder',sizes:LADDER},{name:frags.names.join('+').slice(0,12),sizes:frags.list.map(f=>f.len)},{name:'uncut',sizes:[P.sequence.length]}];
+ let h='<h4>Virtual digest: '+esc(frags.names.join(' + '))+'</h4>'+gelSvg(lanes)+'<table class="tb">';
+ frags.list.forEach((f,k)=>{h+=`<tr><td>${k+1}</td><td>${f.start+1}..${f.end||P.sequence.length}</td><td><b>${f.len}</b> bp</td><td><button data-frag="${k}">FASTA</button></td></tr>`;});
+ return h+'</table><p class="mut">Cuts are on the top strand; overhangs are ignored (fragments are given as top-strand sequence).</p>';
+}
+function enzPanel(){
+ const opts=[['cut','All cutters'],['uniq','Unique (1 cut)'],['two','Two cutters'],['none','Non-cutters'],['all','All']];
+ let h=`<div class="pb"><select id="enzf">${opts.map(([v,t])=>`<option value="${v}"${v===enzFilter?' selected':''}>${t}</option>`).join('')}</select><button data-act="digest">Digest ticked</button><button data-act="clearenz">Clear</button></div><table class="tb">`;
+ for(const s of SITES){const n=s.pos.length;if(!(enzFilter==='all'||(enzFilter==='cut'&&n>0)||(enzFilter==='uniq'&&n===1)||(enzFilter==='two'&&n===2)||(enzFilter==='none'&&n===0)))continue;
+  h+=`<tr><td><input type="checkbox" data-enz="${s.name}"${digestSel.has(s.name)?' checked':''}></td><td><b>${s.name}</b></td><td class="mono">${esc(s.disp)}</td><td>${n}</td><td class="mut">${s.pos.slice(0,6).join(', ')}${n>6?'…':''}</td></tr>`;}
+ h+='</table>';if(frags)h+=fragHtml();return h;
+}
+function selPanel(){
+ if(!sel)return '<p class="mut">Click or drag in the sequence to select a region.</p>';
+ const s=sel.start,e=sel.end,n=e-s,sq=P.sequence.slice(s,e);
+ let h=`<p><b>${s+1}${n?'..'+e:''}</b> · ${n} bp</p>`;
+ if(n>0){h+=`<p>GC ${gcPct(sq).toFixed(1)}% · Tm ≈ ${tm(sq).toFixed(1)} °C <span class="mut">(rough estimate, not nearest-neighbour)</span></p><div class="pb"><button data-act="addfeat">Add feature</button><button data-act="copydna">Copy DNA</button><button data-act="copyrc">Copy reverse complement</button><button data-act="copyaa">Copy translation</button></div><div class="mono wrap">${esc(translate(sq).slice(0,600))}</div>`;}
+ return h+`<div class="pb"><button data-act="editsel">${n>0?'Replace / delete…':'Insert here…'}</button><button data-act="origin">Set origin here</button></div>`;
+}
+function renderPanel(){
+ $$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
+ $('#panel').innerHTML=tab==='features'?featPanel():tab==='enzymes'?enzPanel():selPanel();
+}
+function renderStatus(){
+ const L=P.sequence.length;let t=`${L.toLocaleString()} bp · ${P.topology} · GC ${gcPct(P.sequence).toFixed(1)}% · ${P.features.length} features`;
+ if(sel)t+=sel.end>sel.start?` · selected ${sel.start+1}..${sel.end} (${sel.end-sel.start} bp)`:` · cursor at ${sel.start+1}`;
+ $('#status').textContent=t;
+}
+function renderAll(){
+ if(sitesSeq!==P.sequence||sitesTopo!==P.topology){SITES=findSites(P.sequence,P.topology==='circular',ENZYMES);sitesSeq=P.sequence;sitesTopo=P.topology;}
+ $('#pname').value=P.name;$('#topo').value=P.topology;document.title=P.name+' – PlasmidLite';
+ renderMap();renderPanel();renderSeq();renderStatus();
+}
+function selChanged(full){updateSelBoxes();renderStatus();if(full){renderMap();renderPanel();}}
+function selectFeature(i,scroll){
+ selFeat=i;const f=P.features[i],L=P.sequence.length;sel=f.end>=f.start?{start:f.start,end:f.end}:{start:f.start,end:L};
+ renderMap();renderPanel();renderSeq();renderStatus();if(scroll)scrollToPos(sel.start);
+}
+
+/* ---------- actions ---------- */
+function copy(t){navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed'));}
+function act(a){
+ const sq=sel?P.sequence.slice(sel.start,sel.end):'';
+ switch(a){
+  case 'open':$('#file').click();break;
+  case 'new':newDialog();break;
+  case 'savehtml':saveFile(fname('.html'),buildHtml(),'text/html');scheduleSave();break;
+  case 'gb':saveFile(fname('.gb'),toGenBank(P),'text/plain');break;
+  case 'fasta':saveFile(fname('.fasta'),toFasta(P.name,P.sequence),'text/plain');break;
+  case 'json':saveFile(fname('.json'),JSON.stringify(P,null,1),'application/json');break;
+  case 'undo':doUndo();break;case 'redo':doRedo();break;
+  case 'revcomp':mutate(()=>{revcompProject(P);sel=null;});break;
+  case 'demo':setProject(DEMO);break;
+  case 'addfeat':featDialog(-1);break;
+  case 'copydna':copy(sq);break;case 'copyrc':copy(revcomp(sq));break;case 'copyaa':copy(translate(sq));break;
+  case 'editsel':editSelDialog();break;
+  case 'origin':if(P.topology!=='circular'){toast('Only for circular sequences');break;}if(sel)mutate(()=>{const p=sel.start;setOrigin(P,p);sel=null;});break;
+  case 'clearenz':digestSel.clear();frags=null;renderPanel();break;
+  case 'digest':{if(!digestSel.size){toast('Tick one or more enzymes first');break;}const cuts=[];SITES.filter(s=>digestSel.has(s.name)).forEach(s=>cuts.push(...s.pos));frags={names:[...digestSel],list:digestFrags(P.sequence.length,P.topology==='circular',cuts)};renderPanel();break;}
+ }
+}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-act]');if(b){act(b.dataset.act);return;}
+ const t=e.target.closest('.tab');if(t){tab=t.dataset.tab;renderPanel();return;}
+ const ed=e.target.closest('[data-edit]');if(ed){featDialog(+ed.dataset.edit);return;}
+ const fr=e.target.closest('[data-frag]');if(fr){const f=frags.list[+fr.dataset.frag];saveFile(fname('_fragment'+(+fr.dataset.frag+1)+'.fasta'),toFasta(P.name+'_fragment'+(+fr.dataset.frag+1),fragSeq(P.sequence,f)),'text/plain');return;}
+ const row=e.target.closest('#panel tr[data-f]');if(row){selectFeature(+row.dataset.f,true);return;}
+ const mf=e.target.closest('#map [data-f]');if(mf){selectFeature(+mf.dataset.f,true);}
+});
+document.addEventListener('change',e=>{
+ const t=e.target;
+ if(t.dataset&&t.dataset.enz){t.checked?digestSel.add(t.dataset.enz):digestSel.delete(t.dataset.enz);}
+ else if(t.id==='enzf'){enzFilter=t.value;renderPanel();}
+ else if(t.id==='showEnz'){renderMap();renderSeq();}
+ else if(t.id==='frame'||t.id==='bpr')renderSeq();
+ else if(t.id==='pname'){const v=t.value.trim()||'Untitled';mutate(()=>{P.name=v;});}
+ else if(t.id==='topo'){const v=t.value;mutate(()=>{P.topology=v;});}
+ else if(t.id==='file'&&t.files[0]){openFile(t.files[0]);t.value='';}
+});
+$('#find').addEventListener('keydown',e=>{
+ if(e.key!=='Enter')return;
+ const h=findMotif(P.sequence,e.target.value,P.topology==='circular',sel?sel.end:0);
+ if(!h){toast('Not found');return;}
+ selFeat=-1;sel=h.end>h.start?{start:h.start,end:h.end}:{start:h.start,end:P.sequence.length};selChanged(true);scrollToPos(sel.start);toast('Found on '+(h.strand>0?'forward':'reverse')+' strand at '+(h.start+1));
+});
+
+/* mouse selection in sequence view */
+const sv=$('#seqview');let drag=null;
+function posAt(x,y,caret){
+ const el=document.elementFromPoint(x,y),sq=el&&el.closest&&el.closest('.sq');if(!sq)return null;
+ const W=+$('#bpr').value,r=sq.getBoundingClientRect(),i=Math.floor((x-r.left)/(r.width/W)),L=P.sequence.length;
+ return Math.max(+sq.dataset.s,Math.min(caret?L:L-1,+sq.dataset.s+i));
+}
+sv.addEventListener('pointerdown',e=>{
+ if(e.button!==0)return;
+ const fb=e.target.closest('.fb');if(fb){selectFeature(+fb.dataset.f,false);return;}
+ const p=posAt(e.clientX,e.clientY,true);if(p==null)return;
+ drag={a:p,moved:false};selFeat=-1;sel={start:p,end:p};selChanged(false);
+});
+document.addEventListener('pointermove',e=>{
+ if(!drag)return;const b=posAt(e.clientX,e.clientY,false);if(b==null)return;
+ if(b===drag.a&&!drag.moved)return;drag.moved=true;
+ sel=b>=drag.a?{start:drag.a,end:b+1}:{start:b,end:drag.a};selChanged(false);
+});
+document.addEventListener('pointerup',()=>{if(drag){drag=null;selChanged(true);}});
+
+document.addEventListener('keydown',e=>{
+ const mod=e.ctrlKey||e.metaKey,tag=(e.target.tagName||'').toLowerCase();
+ if(tag==='input'||tag==='textarea')return;
+ if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo();}
+ else if(mod&&e.key.toLowerCase()==='y'){e.preventDefault();doRedo();}
+ else if(mod&&e.key.toLowerCase()==='s'){e.preventDefault();act('savehtml');}
+});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files[0])openFile(e.dataTransfer.files[0]);});
+
+async function boot(){
+ let p=embedded();
+ try{
+  if(p){p.id=p.id||('e'+p.name+(p.sequence||'').length);const a=await idb.get('auto:'+p.id+':'+(p.rev||0));if(a)p=a;}
+  else{const last=await idb.get('last');if(last)p=await idb.get(last);}
+ }catch(e){}
+ setProject(p||DEMO);
+ if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+boot();
+})();
+</script>
+</body></html>
